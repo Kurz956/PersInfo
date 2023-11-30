@@ -78,7 +78,7 @@ class DataBase:
                 INSERT INTO phone(client_id, phone)
                 VALUES(%s, %s) RETURNING phone_id, phone;
                 ''', (client_id, phone))
-            print(f'Телефон {phone} добавлен юзеру # {cur.fetchone()[0]}')
+            #print(f'Телефон {phone} добавлен юзеру # {cur.fetchone()[0]}')
     def client_data_change(self, conn, clinet_id:int, first_name:str=None, last_name:str=None, email:str=None):
         '''Изменить данные о клиенте'''
         with conn.cursor() as cur:
@@ -136,6 +136,7 @@ class DataBase:
             '''
             request = ''
             values = []
+            phone_dict = dict()
             if first_name:
                 request += ' AND c.first_name = %s'
                 values.append(first_name)
@@ -149,21 +150,31 @@ class DataBase:
                 request += ' AND p.phone = %s'
                 values.append(phone)
             request_with_phone += request
+            request_without_phone += request
+            cur.execute(request_without_phone, values)
+            for item in cur.fetchall():
+                if item[0] not in phone_dict:
+                    phone_dict[item[0]] = {k:v for (k,v) in zip(('Имя:', 'Фамилия:', 'Email:'),item[1:])}
+                    phone_dict[item[0]]['Телефоны:'] = 'Отсутствуют'
             cur.execute(request_with_phone, values)
             for item in cur.fetchall():
-                request_without_phone = ''
-                print(item)
-            if request_without_phone:
-                request_without_phone += request
-                cur.execute(request_without_phone, values)
-                for item in cur.fetchall():
-                    print(item)
-
-
+                if item[0] not in phone_dict:
+                    phone_dict[item[0]] = {k: v for (k, v) in zip(('Имя:', 'Фамилия:', 'Email:'), item[1:-1])}
+                    phone_dict[item[0]]['Телефоны:'] = [item[-1]]
+                else:
+                    if phone_dict[item[0]]['Телефоны:'] == 'Отсутствуют':
+                        phone_dict[item[0]]['Телефоны:'] = []
+                    phone_dict[item[0]]['Телефоны:'].append(item[-1])
+            if phone_dict:
+                print('Результаты поиска:')
+                for item in phone_dict:
+                    print(f"ID: {item}\nИмя: {phone_dict[item]['Имя:']}\n"
+                          f"Фамилия: {phone_dict[item]['Фамилия:']}\nEmail: {phone_dict[item]['Email:']}\n"
+                          f"Телефоны: {phone_dict[item]['Телефоны:']}")
 
 with psycopg2.connect(database='PersInfo_db', user='postgres', password='N0name89') as conn:
     clients = [['Vasya', 'Pupkin', 'pupkin@qwe.com'],
-               ['Vasilii', 'NE_Pupkin', 'ne_pupkin@qwe.com'],
+               ['Vasilii','Отсутвует','ne_pupkin@qwe.com'],
                ['Jenya', 'Jhonson', 'jynya@qwe.com'],
                ['Olexis', 'Sanchez', 'sanchez@qwe.com']
                ]
@@ -171,17 +182,17 @@ with psycopg2.connect(database='PersInfo_db', user='postgres', password='N0name8
     PersonalInfo.drop_db(conn)
     PersonalInfo.create_db(conn)
     [PersonalInfo.add_client(conn, *item) for item in clients]
-    PersonalInfo.add_client_phone(conn, 1, '+7-912-22-45-656')
-    PersonalInfo.add_client_phone(conn, 1, '+7-999-22-22-222')
+    PersonalInfo.add_client_phone(conn, 2, '+7-912-22-45-656')
+    PersonalInfo.add_client_phone(conn, 2, '+7-999-22-22-222')
     PersonalInfo.add_client_phone(conn, 2, '+7-999-3-2333-222')
     PersonalInfo.add_client_phone(conn, 3, '+9-912-22-45-656')
     PersonalInfo.client_data_change(conn, 1, last_name='Petrov')
     PersonalInfo.client_phone_change(conn, 3, '123_new')
-    PersonalInfo.remove_client_phone(conn, 1)
-    PersonalInfo.client(conn, first_name='Vasya')
-    PersonalInfo.remove_client(conn, 1)
-    print('remove id=1 Vasya')
-    PersonalInfo.client_data_change(conn, 2, first_name='Vasya', last_name='Pupidze', email='new_email@qwe.com')
+    #PersonalInfo.remove_client_phone(conn, 1)
+    #PersonalInfo.client(conn, first_name='Vasya')
+    #PersonalInfo.remove_client(conn, 1)
+    #print('remove id=1 Vasya')
+    PersonalInfo.client_data_change(conn, 2, first_name='Vasya', email='new_email@qwe.com')
     print('rename id=2 from Vasilii to Vasya')
     PersonalInfo.client(conn, first_name='Vasya')
 
