@@ -49,7 +49,7 @@ class DataBase:
                 );  
                 ''')
         conn.commit()
-    def add_client(self, conn, first_name=None, last_name=None, email=None):
+    def add_client(self, conn, first_name:str=None, last_name:str=None, email:str=None):
         '''Добавить нового клиента'''
         with conn.cursor() as cur:
             request = 'INSERT INTO client('
@@ -71,8 +71,7 @@ class DataBase:
             if last_name: message += f'Фамилия: {last_name}\n '
             if email: message += f'e-mail: {email}\n '
             print(message)
-
-    def add_client_phone(self, conn, client_id, phone):
+    def add_client_phone(self, conn, client_id:int, phone:str):
         '''Добавить телефон для существующего клиента'''
         with conn.cursor() as cur:
             cur.execute('''
@@ -80,7 +79,7 @@ class DataBase:
                 VALUES(%s, %s) RETURNING phone_id, phone;
                 ''', (client_id, phone))
             print(f'Телефон {phone} добавлен юзеру # {cur.fetchone()[0]}')
-    def client_data_change(self, conn, clinet_id, first_name=None, last_name=None, email=None):
+    def client_data_change(self, conn, clinet_id:int, first_name:str=None, last_name:str=None, email:str=None):
         '''Изменить данные о клиенте'''
         with conn.cursor() as cur:
             request = 'UPDATE client SET '
@@ -99,14 +98,14 @@ class DataBase:
             values.append(clinet_id)
             cur.execute(request, values)
         conn.commit()
-    def client_phone_change(self, conn, phone_id, new_phone_number):
+    def client_phone_change(self, conn, phone_id:int, new_phone_number:str):
         with conn.cursor() as cur:
             cur.execute('''
                 UPDATE phone SET phone = %s
                 WHERE phone_id = %s               
                 ''', (new_phone_number, phone_id))
         conn.commit()
-    def remove_client_phone(self, conn, phone):
+    def remove_client_phone(self, conn, phone:str):
         '''Удалить телефон для существующего клиента'''
         with conn.cursor() as cur:
             cur.execute('''
@@ -114,23 +113,29 @@ class DataBase:
                 WHERE phone_id = %s;
                 ''', (phone,))
         conn.commit()
-    def remove_client(self, conn, client):
+    def remove_client(self, conn, client:int):
         '''Удалить существующего клиента'''
         with conn.cursor() as cur:
             cur.execute('''
                 DELETE FROM client
                 WHERE client_id = %s;
                 ''', (client,))
-    def client(self, conn, first_name=None, last_name=None, email=None, phone=None) -> dict:
+    def client(self, conn, first_name:str=None, last_name:str=None, email:str=None, phone:str=None):
         '''Найти клиента по его данным: имени, фамилии, email или телефону'''
         with conn.cursor() as cur:
-            request = '''SELECT c.first_name, c.last_name, c.email, p.phone 
+            request_with_phone = '''
+            SELECT c.client_id, c.first_name, c.last_name, c.email, p.phone 
             FROM client c 
             JOIN phone p on c.client_id = p.client_id 
-            WHERE 1=1'''
-
+            WHERE 1=1
+            '''
+            request_without_phone = '''
+            SELECT c. client_id, c.first_name, c.last_name, c.email
+            FROM client c 
+            WHERE 1=1
+            '''
+            request = ''
             values = []
-            dict_to_return = dict()
             if first_name:
                 request += ' AND c.first_name = %s'
                 values.append(first_name)
@@ -143,24 +148,22 @@ class DataBase:
             if phone:
                 request += ' AND p.phone = %s'
                 values.append(phone)
-            cur.execute(request, values)
-            for i in cur.fetchall():
-                print(i)
-
-
-           # for person in dict_to_return:
-           #     for item in cur.fetchall():
-           #         dict_to_return['Имя:'] = item[0]
-           #         dict_to_return['Фамилия:'] = item[1]
-           #         dict_to_return['e-mail'] = item[2]
-           #         dict_to_return['телефон:'] = item[3]
-           # return dict_to_return
+            request_with_phone += request
+            cur.execute(request_with_phone, values)
+            for item in cur.fetchall():
+                request_without_phone = ''
+                print(item)
+            if request_without_phone:
+                request_without_phone += request
+                cur.execute(request_without_phone, values)
+                for item in cur.fetchall():
+                    print(item)
 
 
 
 with psycopg2.connect(database='PersInfo_db', user='postgres', password='N0name89') as conn:
-    clients = [['Vasya', 'Pupkin', 'qwe@qwe.com'],
-               ['Vasya', 'NE_Pupkin', '1q1w1e1@qwe.com'],
+    clients = [['Vasya', 'Pupkin', 'pupkin@qwe.com'],
+               ['Vasilii', 'NE_Pupkin', 'ne_pupkin@qwe.com'],
                ['Jenya', 'Jhonson', 'jynya@qwe.com'],
                ['Olexis', 'Sanchez', 'sanchez@qwe.com']
                ]
@@ -173,11 +176,15 @@ with psycopg2.connect(database='PersInfo_db', user='postgres', password='N0name8
     PersonalInfo.add_client_phone(conn, 2, '+7-999-3-2333-222')
     PersonalInfo.add_client_phone(conn, 3, '+9-912-22-45-656')
     PersonalInfo.client_data_change(conn, 1, last_name='Petrov')
-    #PersonalInfo.client_phone_change(conn, 3, '123')
-    #PersonalInfo.remove_client_phone(conn, 1)
-    #PersonalInfo.remove_client(conn, 1)
+    PersonalInfo.client_phone_change(conn, 3, '123_new')
+    PersonalInfo.remove_client_phone(conn, 1)
+    PersonalInfo.client(conn, first_name='Vasya')
+    PersonalInfo.remove_client(conn, 1)
+    print('remove id=1 Vasya')
+    PersonalInfo.client_data_change(conn, 2, first_name='Vasya', last_name='Pupidze', email='new_email@qwe.com')
+    print('rename id=2 from Vasilii to Vasya')
     PersonalInfo.client(conn, first_name='Vasya')
 
-    #PersonalInfo.client_data_change(conn, [1, 'Vasilii', 'Pupidze', 'new_email@qwe.com'])
+
 
 
