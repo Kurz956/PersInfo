@@ -49,40 +49,32 @@ class DataBase:
                 );  
                 ''')
         conn.commit()
-    def add_client(self, conn, first_name:str=None, last_name:str=None, email:str=None):
+    def add_client(self, conn, first_name: str = None, last_name: str = None, email: str = None):
         '''Добавить нового клиента'''
         with conn.cursor() as cur:
-            request = 'INSERT INTO client('
-            values = []
-            if first_name:
-                request += 'first_name, '
-                values.append(first_name)
-            if last_name:
-                request += 'last_name, '
-                values.append(last_name)
-            if email:
-                request += 'email, '
-                values.append(email)
-            request = request.rstrip(', ') + f') VALUES({"%s," * len(values)}'.rstrip(', ')
-            request +=') RETURNING client_id, first_name, last_name, email'
+            values = [first_name, last_name, email]
+            request = f'INSERT INTO client(first_name, last_name, email) '\
+                      f'VALUES(%s, %s, %s) '\
+                      f'RETURNING client_id, first_name, last_name, email'
+
             cur.execute(request, values)
-            message = f'Добавлен клиент:\n ID: {cur.fetchone()[0]}\n '
-            if first_name: message += f'Имя: {first_name}\n '
-            if last_name: message += f'Фамилия: {last_name}\n '
-            if email: message += f'e-mail: {email}\n '
+            message = f'Добавлен клиент:\n ID: {cur.fetchone()[0]}\n '\
+                      f'Имя: {first_name}\n '\
+                      f'Фамилия: {last_name}\n '\
+                      f'e-mail: {email}\n '
             print(message)
     def add_client_phone(self, conn, client_id:int, phone:str):
         '''Добавить телефон для существующего клиента'''
         with conn.cursor() as cur:
             cur.execute('''
                 INSERT INTO phone(client_id, phone)
-                VALUES(%s, %s) RETURNING phone_id, phone;
+                VALUES(%s, %s) RETURNING client_id, phone;
                 ''', (client_id, phone))
-            #print(f'Телефон {phone} добавлен юзеру # {cur.fetchone()[0]}')
+            print(f'Телефон {phone} добавлен клиенту # {cur.fetchone()[0]}')
     def client_data_change(self, conn, clinet_id:int, first_name:str=None, last_name:str=None, email:str=None):
         '''Изменить данные о клиенте'''
         with conn.cursor() as cur:
-            request = 'UPDATE client SET '
+            request = 'UPDATE client SET ' # относительно переданных данных
             values = []
             if first_name:
                 request += 'first_name = %s, '
@@ -102,9 +94,10 @@ class DataBase:
         with conn.cursor() as cur:
             cur.execute('''
                 UPDATE phone SET phone = %s
-                WHERE phone_id = %s               
+                WHERE phone_id = %s
                 ''', (new_phone_number, phone_id))
         conn.commit()
+        print(f'Телефон # {phone_id} изменен на {new_phone_number}')
     def remove_client_phone(self, conn, phone:str):
         '''Удалить телефон для существующего клиента'''
         with conn.cursor() as cur:
@@ -113,6 +106,7 @@ class DataBase:
                 WHERE phone_id = %s;
                 ''', (phone,))
         conn.commit()
+        print(f'Телефон # {phone} удален')
     def remove_client(self, conn, client:int):
         '''Удалить существующего клиента'''
         with conn.cursor() as cur:
@@ -120,15 +114,18 @@ class DataBase:
                 DELETE FROM client
                 WHERE client_id = %s;
                 ''', (client,))
+        print(f'Клиент # {client} удален')
     def client(self, conn, first_name:str=None, last_name:str=None, email:str=None, phone:str=None):
         '''Найти клиента по его данным: имени, фамилии, email или телефону'''
         with conn.cursor() as cur:
+            # поиск по базе, если у клиента есть телефон
             request_with_phone = '''
             SELECT c.client_id, c.first_name, c.last_name, c.email, p.phone 
             FROM client c 
             JOIN phone p on c.client_id = p.client_id 
             WHERE 1=1
             '''
+            # поиск по базе, если у клиента нет телефона
             request_without_phone = '''
             SELECT c. client_id, c.first_name, c.last_name, c.email
             FROM client c 
@@ -152,6 +149,7 @@ class DataBase:
             request_with_phone += request
             request_without_phone += request
             cur.execute(request_without_phone, values)
+            # формируем словарь с клиентами, удовлетворяющими критериям поиска, сначала без телефона, потом с ним(и)
             for item in cur.fetchall():
                 if item[0] not in phone_dict:
                     phone_dict[item[0]] = {k:v for (k,v) in zip(('Имя:', 'Фамилия:', 'Email:'),item[1:])}
@@ -165,6 +163,7 @@ class DataBase:
                     if phone_dict[item[0]]['Телефоны:'] == 'Отсутствуют':
                         phone_dict[item[0]]['Телефоны:'] = []
                     phone_dict[item[0]]['Телефоны:'].append(item[-1])
+            # если поиск успешен, выводим результаты
             if phone_dict:
                 print('Результаты поиска:')
                 for item in phone_dict:
@@ -178,6 +177,7 @@ with psycopg2.connect(database='PersInfo_db', user='postgres', password='N0name8
                ['Jenya', 'Jhonson', 'jynya@qwe.com'],
                ['Olexis', 'Sanchez', 'sanchez@qwe.com']
                ]
+    
     PersonalInfo = DataBase()
     PersonalInfo.drop_db(conn)
     PersonalInfo.create_db(conn)
@@ -188,12 +188,10 @@ with psycopg2.connect(database='PersInfo_db', user='postgres', password='N0name8
     PersonalInfo.add_client_phone(conn, 3, '+9-912-22-45-656')
     PersonalInfo.client_data_change(conn, 1, last_name='Petrov')
     PersonalInfo.client_phone_change(conn, 3, '123_new')
-    #PersonalInfo.remove_client_phone(conn, 1)
-    #PersonalInfo.client(conn, first_name='Vasya')
-    #PersonalInfo.remove_client(conn, 1)
-    #print('remove id=1 Vasya')
+    PersonalInfo.remove_client_phone(conn, 1)
+    PersonalInfo.client(conn, first_name='Vasya')
+    PersonalInfo.remove_client(conn, 1)
     PersonalInfo.client_data_change(conn, 2, first_name='Vasya', email='new_email@qwe.com')
-    print('rename id=2 from Vasilii to Vasya')
     PersonalInfo.client(conn, first_name='Vasya')
 
 
